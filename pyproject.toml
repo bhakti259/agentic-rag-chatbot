@@ -1,7 +1,22 @@
 [project]
 name = "agentic-rag-chatbot"
 version = "0.1.0"
-description = "Add your description here"
+description = "Agentic RAG chatbot for research papers with routing, retrieval, and claim verification"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "langchain>=1.4.0",
+    "langchain-openai>=1.6.0",
+    "langchain-qdrant>=1.1.0",
+    "langgraph>=1.2.11",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.3",
+    "qdrant-client>=1.19.0",
+    "streamlit>=1.63.0",
+    "tavily-python>=0.8.1",
+]
+
+[dependency-groups]
+dev = [
+    "deepeval>=4.2.2",
+]
