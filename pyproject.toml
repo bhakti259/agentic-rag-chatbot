@@ -5,13 +5,17 @@ description = "Agentic RAG chatbot for research papers with routing, retrieval, 
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "beautifulsoup4>=4.15.0",
     "langchain>=1.4.0",
+    "langchain-community>=0.4.2",
     "langchain-openai>=1.6.0",
     "langchain-qdrant>=1.1.0",
     "langgraph>=1.2.11",
     "pydantic>=2.13.5",
+    "pypdf>=6.18.0",
     "python-dotenv>=1.2.3",
     "qdrant-client>=1.19.0",
+    "requests>=2.34.2",
     "streamlit>=1.63.0",
     "tavily-python>=0.8.1",
 ]
