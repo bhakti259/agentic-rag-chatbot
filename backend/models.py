@@ -42,3 +42,27 @@ class QueryRewrite(BaseModel):
                     "match likely terminology in the paper (e.g. more specific, "
                     "different synonyms, or breaking a compound question into its core part)."
     )
+    
+class VerdictResult(BaseModel):
+    """
+    Structured output for the claim verification step — summarizes whether
+    a claim from the paper still holds up against current web/arXiv findings.
+    """
+    verdict: Literal["still_valid", "outdated", "contradicted", "inconclusive"] = Field(
+    description="'still_valid' if current sources support the claim unchanged. "
+                "'outdated' if the claim was accurate when made, but has since been superseded by a better "
+                "approach or newer consensus — the original claim wasn't wrong, it's just no longer the "
+                "current best answer (e.g., 'RNNs were best for translation' → later surpassed by Transformers "
+                "is OUTDATED, not contradicted, since RNNs really were effective at the time). "
+                "'contradicted' if newer findings show the original claim was actually incorrect or its "
+                "reasoning flawed — not merely 'a better option came along', but 'this was never really true' "
+                "or 'this stopped working the way it was claimed to'. "
+                "'inconclusive' if search results don't provide enough evidence either way."
+    )
+    explanation: str = Field(
+        description="A clear explanation of the verdict, referencing what the search results showed."
+    )
+    supporting_sources: list[str] = Field(
+        description="URLs of the most relevant sources found (web articles or arXiv papers) that inform this verdict.",
+        default_factory=list,
+    )
