@@ -7,6 +7,9 @@ import tempfile
 import requests
 from tavily import TavilyClient
 
+from dotenv import load_dotenv
+load_dotenv()
+
 
 def load_pdf(file_path: str):
     """
