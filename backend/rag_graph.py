@@ -6,6 +6,14 @@ from backend.vector_store import retrieve as vector_retrieve
 from backend.models import RelevancyCheck, QueryRewrite
 from langgraph.graph import StateGraph, END
 
+from tavily import TavilyClient
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
+
+
+tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
 class GraphState(TypedDict):
     """
@@ -150,10 +158,37 @@ def direct_answer_stub(state: GraphState) -> dict:
     return {"final_answer": f"[STUB: direct_answer] {response.content}"}
 
 
-def web_search_stub(state: GraphState) -> dict:
-    """TEMPORARY STUB — will become a real web_search_node later."""
-    return {"final_answer": "[STUB: web_search] This branch is reachable but not yet implemented."}
+def web_search_node(state: GraphState) -> dict:
+    """
+    Searches the live web for current information and generates an answer
+    grounded in the search results.
+    """
+    search_results = tavily_client.search(
+        query=state["query"],
+        max_results=5,
+    )
 
+    results_text = "\n\n".join(
+        f"Source: {r['url']}\n{r['content']}"
+        for r in search_results.get("results", [])
+    )
+
+    prompt = f"""
+        Answer the user's question using the web search results below. Cite which
+        source(s) you're drawing from where relevant. If the results don't contain
+        enough information, say so honestly.
+
+        Search results:
+        {results_text}
+
+        Question: {state["query"]}
+    """
+
+    response = llm.invoke(prompt)
+
+    return {
+        "final_answer": response.content,
+    }
 
 def verify_claim_stub(state: GraphState) -> dict:
     """TEMPORARY STUB — will become a real verify_claim_node later."""
@@ -167,7 +202,7 @@ graph.add_node("relevancy_check", relevancy_check_node)
 graph.add_node("rewrite", rewrite_node)
 graph.add_node("generate", generate_node)
 graph.add_node("direct_answer", direct_answer_stub)
-graph.add_node("web_search", web_search_stub)
+graph.add_node("web_search", web_search_node)
 graph.add_node("verify_claim", verify_claim_stub)
 
 graph.set_entry_point("router")
