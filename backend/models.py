@@ -66,3 +66,16 @@ class VerdictResult(BaseModel):
         description="URLs of the most relevant sources found (web articles or arXiv papers) that inform this verdict.",
         default_factory=list,
     )
+    
+
+class OffTopicCheck(BaseModel):
+    """
+    Structured output for detecting whether a query is genuinely off-topic
+    (chit-chat, unrelated requests) rather than a real research question.
+    """
+    is_off_topic: bool = Field(
+        description="True if the query is casual conversation, a greeting, or "
+                    "completely unrelated to research papers/analysis (e.g. 'how are you', "
+                    "'tell me a joke', 'what's 2+2'). False for any genuine question about "
+                    "research, papers, or claims — even if informally phrased."
+    )
