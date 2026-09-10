@@ -3,7 +3,7 @@ from langgraph.graph.message import add_messages
 from langchain_openai import ChatOpenAI
 from backend.models import RouteDecision
 from backend.vector_store import retrieve as vector_retrieve
-from backend.models import RelevancyCheck, QueryRewrite
+from backend.models import RelevancyCheck, QueryRewrite, VerdictResult
 from langgraph.graph import StateGraph, END
 
 from tavily import TavilyClient
@@ -190,9 +190,65 @@ def web_search_node(state: GraphState) -> dict:
         "final_answer": response.content,
     }
 
-def verify_claim_stub(state: GraphState) -> dict:
-    """TEMPORARY STUB — will become a real verify_claim_node later."""
-    return {"final_answer": "[STUB: verify_claim] This branch is reachable but not yet implemented."}
+verdict_llm = llm.with_structured_output(VerdictResult)
+
+
+def verify_claim_node(state: GraphState) -> dict:
+    """
+    Searches web + arXiv for evidence about a claim, then produces a
+    structured verdict on whether it still holds up.
+    """
+    query = state["query"]
+
+    # Search general web
+    web_results = tavily_client.search(query=query, max_results=3)
+
+    # Search arXiv specifically, reusing the site-restricted pattern from load_arxiv
+    arxiv_results = tavily_client.search(
+        query=f"{query} site:arxiv.org",
+        max_results=3,
+    )
+
+    all_results = web_results.get("results", []) + arxiv_results.get("results", [])
+    results_text = "\n\n".join(
+        f"Source: {r['url']}\n{r['content']}"
+        for r in all_results
+    )
+
+    prompt = f"""
+        Claim to verify: {query}
+
+        Search results (web + arXiv):
+        {results_text}
+
+        Does current evidence support, contradict, or make this claim outdated?
+        """
+
+    verdict_result = verdict_llm.invoke(prompt)
+
+    # Turn the structured verdict into a readable answer
+    verdict_labels = {
+        "still_valid": "✅ Still Valid",
+        "outdated": "⏳ Outdated",
+        "contradicted": "❌ Contradicted",
+        "inconclusive": "❓ Inconclusive",
+    }
+
+    sources_list = "\n".join(f"- {url}" for url in verdict_result.supporting_sources)
+
+    final_answer = f"""**Verdict: {verdict_labels.get(verdict_result.verdict, verdict_result.verdict)}**
+
+    {verdict_result.explanation}
+
+    **Sources:**
+    {sources_list}
+    """
+
+    return {
+        "verdict": verdict_result.verdict,
+        "final_answer": final_answer,
+    }
+
 
 graph = StateGraph(GraphState)
 
@@ -203,7 +259,7 @@ graph.add_node("rewrite", rewrite_node)
 graph.add_node("generate", generate_node)
 graph.add_node("direct_answer", direct_answer_stub)
 graph.add_node("web_search", web_search_node)
-graph.add_node("verify_claim", verify_claim_stub)
+graph.add_node("verify_claim", verify_claim_node)
 
 graph.set_entry_point("router")
 
