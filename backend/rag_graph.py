@@ -134,6 +134,30 @@ def should_rewrite(state: GraphState) -> str:
     else:
         return "rewrite"
 
+def route_query(state: GraphState) -> str:
+    """
+    Conditional edge: sends the query down the path the router decided on.
+    """
+    return state["route"]  # "direct_answer", "retrieve", "web_search", or "verify_claim"
+
+
+def direct_answer_stub(state: GraphState) -> dict:
+    """
+    TEMPORARY STUB — will become a real direct_answer_node later.
+    For now, just proves the branch is reachable.
+    """
+    response = llm.invoke(state["query"])
+    return {"final_answer": f"[STUB: direct_answer] {response.content}"}
+
+
+def web_search_stub(state: GraphState) -> dict:
+    """TEMPORARY STUB — will become a real web_search_node later."""
+    return {"final_answer": "[STUB: web_search] This branch is reachable but not yet implemented."}
+
+
+def verify_claim_stub(state: GraphState) -> dict:
+    """TEMPORARY STUB — will become a real verify_claim_node later."""
+    return {"final_answer": "[STUB: verify_claim] This branch is reachable but not yet implemented."}
 
 graph = StateGraph(GraphState)
 
@@ -142,9 +166,24 @@ graph.add_node("retrieve", retrieve_node)
 graph.add_node("relevancy_check", relevancy_check_node)
 graph.add_node("rewrite", rewrite_node)
 graph.add_node("generate", generate_node)
+graph.add_node("direct_answer", direct_answer_stub)
+graph.add_node("web_search", web_search_stub)
+graph.add_node("verify_claim", verify_claim_stub)
 
 graph.set_entry_point("router")
-graph.add_edge("router", "retrieve")
+
+# NEW: router branches to one of four paths based on state["route"]
+graph.add_conditional_edges(
+    "router",
+    route_query,
+    {
+        "direct_answer": "direct_answer",
+        "retrieve": "retrieve",
+        "web_search": "web_search",
+        "verify_claim": "verify_claim",
+    },
+)
+
 graph.add_edge("retrieve", "relevancy_check")
 
 graph.add_conditional_edges(
@@ -156,7 +195,10 @@ graph.add_conditional_edges(
     },
 )
 
-graph.add_edge("rewrite", "retrieve")  # loop back after rewriting
+graph.add_edge("rewrite", "retrieve")
 graph.add_edge("generate", END)
+graph.add_edge("direct_answer", END)
+graph.add_edge("web_search", END)
+graph.add_edge("verify_claim", END)
 
 app = graph.compile()
