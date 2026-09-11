@@ -8,21 +8,49 @@ from backend.paper_loader import load_paper
 from backend.vector_store import add_chunks
 
 st.set_page_config(page_title="Agentic RAG Chatbot", page_icon="📄")
-st.title("📄 Agentic RAG Chatbot")
 
-# Initialize session state
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
+# --- Multi-session state: a dict of session_id -> session data ---
+if "sessions" not in st.session_state:
+    st.session_state.sessions = {}
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if "active_session_id" not in st.session_state:
+    # Create the first session automatically
+    new_id = str(uuid.uuid4())
+    st.session_state.sessions[new_id] = {"messages": [], "papers_loaded": []}
+    st.session_state.active_session_id = new_id
 
-if "paper_loaded" not in st.session_state:
-    st.session_state.paper_loaded = False
 
-# --- Sidebar: paper ingestion ---
+def create_new_session():
+    new_id = str(uuid.uuid4())
+    st.session_state.sessions[new_id] = {"messages": [], "papers_loaded": []}
+    st.session_state.active_session_id = new_id
+
+
+# --- Sidebar: session management ---
 with st.sidebar:
+    st.header("💬 Sessions")
+
+    if st.button("➕ New Chat"):
+        create_new_session()
+        st.rerun()
+
+    st.divider()
+
+    for sid, sdata in st.session_state.sessions.items():
+        label = f"Session {sid[:8]}"
+        if sdata["papers_loaded"]:
+            label += f" ({len(sdata['papers_loaded'])} papers)"
+        if st.button(label, key=f"switch_{sid}"):
+            st.session_state.active_session_id = sid
+            st.rerun()
+
+    st.divider()
+
+    # --- Paper ingestion (scoped to the ACTIVE session) ---
     st.header("📥 Load a Paper")
+
+    active_id = st.session_state.active_session_id
+    active_session = st.session_state.sessions[active_id]
 
     input_type = st.radio(
         "Choose input type:",
@@ -34,7 +62,6 @@ with st.sidebar:
 
         if uploaded_file and st.button("Load File"):
             with st.spinner("Processing document..."):
-                # Save uploaded file to a temp path so our loaders (which expect file paths) can read it
                 suffix = os.path.splitext(uploaded_file.name)[1]
                 with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                     tmp.write(uploaded_file.getvalue())
@@ -44,45 +71,49 @@ with st.sidebar:
 
                 try:
                     chunks = load_paper(tmp_path, source_type)
-                    add_chunks(st.session_state.session_id, chunks)
-                    st.session_state.paper_loaded = True
+                    add_chunks(active_id, chunks)
+                    active_session["papers_loaded"].append(uploaded_file.name)
                     st.success(f"Loaded {len(chunks)} chunks from {uploaded_file.name}")
                 finally:
                     os.remove(tmp_path)
 
     elif input_type == "Web URL":
         url = st.text_input("Enter a URL:")
-
         if url and st.button("Load URL"):
             with st.spinner("Fetching and processing page..."):
-                chunks = load_paper(url, "url")
-                add_chunks(st.session_state.session_id, chunks)
-                st.session_state.paper_loaded = True
-                st.success(f"Loaded {len(chunks)} chunks from URL")
+                try:
+                    chunks = load_paper(url, "url")
+                    add_chunks(active_id, chunks)
+                    active_session["papers_loaded"].append(url)
+                    st.success(f"Loaded {len(chunks)} chunks from URL")
+                except ValueError as e:
+                    st.error(str(e))
 
     elif input_type == "ArXiv":
         arxiv_query = st.text_input("Enter a paper title or ArXiv ID:")
-
         if arxiv_query and st.button("Load from ArXiv"):
             with st.spinner("Searching ArXiv and processing paper..."):
                 chunks = load_paper(arxiv_query, "arxiv")
-                add_chunks(st.session_state.session_id, chunks)
-                st.session_state.paper_loaded = True
+                add_chunks(active_id, chunks)
+                active_session["papers_loaded"].append(arxiv_query)
                 st.success(f"Loaded {len(chunks)} chunks from ArXiv")
 
-    if st.session_state.paper_loaded:
-        st.info("✅ A paper is loaded for this session.")
+    if active_session["papers_loaded"]:
+        st.info(f"📄 Loaded papers: {', '.join(active_session['papers_loaded'])}")
 
 
-# --- Main chat area (unchanged from before) ---
-for message in st.session_state.messages:
+# --- Main chat area (scoped to the active session) ---
+st.title(f"📄 Agentic RAG Chatbot")
+st.caption(f"Session: {active_id[:8]}")
+
+for message in active_session["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 user_query = st.chat_input("Ask a question about your paper...")
 
 if user_query:
-    st.session_state.messages.append({"role": "user", "content": user_query})
+    active_session["messages"].append({"role": "user", "content": user_query})
     with st.chat_message("user"):
         st.markdown(user_query)
 
@@ -93,7 +124,7 @@ if user_query:
     else:
         result = rag_app.invoke({
             "messages": [],
-            "session_id": st.session_state.session_id,
+            "session_id": active_id,
             "query": user_query,
             "route": "",
             "retrieved_chunks": [],
@@ -104,6 +135,6 @@ if user_query:
         })
         answer = result["final_answer"]
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    active_session["messages"].append({"role": "assistant", "content": answer})
     with st.chat_message("assistant"):
         st.markdown(answer)

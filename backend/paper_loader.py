@@ -58,7 +58,6 @@ def load_text(file_path: str):
     return chunks
 
 
-
 def load_urls(urls: list[str]):
     """
     Load one or more web pages and split them into chunks.
@@ -70,7 +69,21 @@ def load_urls(urls: list[str]):
         list of LangChain Document objects, each representing one chunk
     """
     loader = WebBaseLoader(urls)
-    raw_documents = loader.load()  # one Document per URL
+    raw_documents = loader.load()
+
+    # Sanity check: catch obviously-blocked/failed fetches before they
+    # pollute the vector store with error-page content
+    blocked_indicators = ["access denied", "403 forbidden", "are you a robot", "captcha"]
+
+    for doc in raw_documents:
+        content_lower = doc.page_content.lower()
+        if len(doc.page_content.strip()) < 200 or any(
+            indicator in content_lower for indicator in blocked_indicators
+        ):
+            raise ValueError(
+                f"Failed to fetch usable content from {doc.metadata.get('source', 'URL')} — "
+                f"the page may be blocking automated requests, or returned an error page."
+            )
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
