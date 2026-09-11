@@ -22,6 +22,7 @@ class GraphState(TypedDict):
     messages: Annotated[list, add_messages]  # conversation history
     session_id: str
     query: str                    # current user query (may get rewritten)
+    original_query: str  # the user's actual question, never mutated
     route: str                    # decision from the router
     retrieved_chunks: list        # chunks from vector store
     is_relevant: bool             # relevancy check result
@@ -115,13 +116,21 @@ def generate_node(state: GraphState) -> dict:
     chunks_text = "\n\n".join(doc.page_content for doc in state["retrieved_chunks"])
 
     prompt = f"""
-        Answer the user's question using only the context below. If the context
-        doesn't contain enough information, say so honestly rather than guessing.
+        Answer the user's question using only the context below.
+
+        IMPORTANT: If the context doesn't contain enough information to answer confidently,
+        say so clearly and directly — even if you have general knowledge on this topic from
+        elsewhere. Do NOT fill gaps with information you know from outside this context,
+        even if it seems related or highly likely to be relevant.
+
+        Respond only in plain natural language, as a direct answer to the question.
+        Do NOT include labels like "Thought:", "Action:", "Observation:", "Question:",
+        or any other meta-commentary about your reasoning process — just the answer itself.
 
         Context:
         {chunks_text}
 
-        Question: {state["query"]}
+        Question: {state["original_query"]}
     """
 
     response = llm.invoke(prompt)
@@ -129,7 +138,6 @@ def generate_node(state: GraphState) -> dict:
     return {
         "final_answer": response.content,
     }
-    
     
 def should_rewrite(state: GraphState) -> str:
     """

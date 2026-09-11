@@ -125,6 +125,7 @@ if user_query:
         result = rag_app.invoke({
             "messages": [],
             "session_id": active_id,
+            "original_query": user_query,
             "query": user_query,
             "route": "",
             "retrieved_chunks": [],
