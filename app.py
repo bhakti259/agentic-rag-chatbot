@@ -3,7 +3,7 @@ import uuid
 import tempfile
 import os
 from backend.rag_graph import app as rag_app
-from backend.btw_handler import handle_off_topic
+from backend.btw_handler import is_btw_command, handle_btw
 from backend.paper_loader import load_paper
 from backend.vector_store import add_chunks
 
@@ -113,15 +113,20 @@ for message in active_session["messages"]:
 user_query = st.chat_input("Ask a question about your paper...")
 
 if user_query:
-    active_session["messages"].append({"role": "user", "content": user_query})
-    with st.chat_message("user"):
-        st.markdown(user_query)
-
-    off_topic_response = handle_off_topic(user_query)
-
-    if off_topic_response:
-        answer = off_topic_response
+    
+    if is_btw_command(user_query):
+        # Side-channel: NOT saved to session history
+        with st.chat_message("user"):
+            st.markdown(user_query)
+        answer = handle_btw(user_query)
+        with st.chat_message("assistant"):
+            st.markdown(answer)
     else:
+        
+        active_session["messages"].append({"role": "user", "content": user_query})
+        with st.chat_message("user"):
+            st.markdown(user_query)
+
         result = rag_app.invoke({
             "messages": [],
             "session_id": active_id,
@@ -136,6 +141,6 @@ if user_query:
         })
         answer = result["final_answer"]
 
-    active_session["messages"].append({"role": "assistant", "content": answer})
-    with st.chat_message("assistant"):
-        st.markdown(answer)
+        active_session["messages"].append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.markdown(answer)
