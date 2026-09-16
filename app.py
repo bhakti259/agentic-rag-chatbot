@@ -16,13 +16,23 @@ if "sessions" not in st.session_state:
 if "active_session_id" not in st.session_state:
     # Create the first session automatically
     new_id = str(uuid.uuid4())
-    st.session_state.sessions[new_id] = {"messages": [], "papers_loaded": []}
+    st.session_state.sessions[new_id] = {
+        "messages": [],
+        "display_messages": [],
+        "papers_loaded": []
+    }
     st.session_state.active_session_id = new_id
 
 
 def create_new_session():
     new_id = str(uuid.uuid4())
-    st.session_state.sessions[new_id] = {"messages": [], "papers_loaded": []}
+    st.session_state.sessions[new_id] = {
+        "messages": [],           # LLM conversational context — /btw excluded
+        "display_messages": [],   # what's shown in the chat UI — includes /btw
+        "papers_loaded": []
+    }
+
+   # st.session_state.sessions[new_id] = {"messages": [], "papers_loaded": []}
     st.session_state.active_session_id = new_id
 
 
@@ -106,24 +116,26 @@ with st.sidebar:
 st.title(f"📄 Agentic RAG Chatbot")
 st.caption(f"Session: {active_id[:8]}")
 
-for message in active_session["messages"]:
+for message in active_session["display_messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 user_query = st.chat_input("Ask a question about your paper...")
 
 if user_query:
-    
     if is_btw_command(user_query):
-        # Side-channel: NOT saved to session history
+        active_session["display_messages"].append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
+
         answer = handle_btw(user_query)
+
+        active_session["display_messages"].append({"role": "assistant", "content": answer})
         with st.chat_message("assistant"):
             st.markdown(answer)
     else:
-        
         active_session["messages"].append({"role": "user", "content": user_query})
+        active_session["display_messages"].append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
 
@@ -142,5 +154,6 @@ if user_query:
         answer = result["final_answer"]
 
         active_session["messages"].append({"role": "assistant", "content": answer})
+        active_session["display_messages"].append({"role": "assistant", "content": answer})
         with st.chat_message("assistant"):
             st.markdown(answer)
