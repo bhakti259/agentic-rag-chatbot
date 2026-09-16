@@ -157,3 +157,26 @@ def load_paper(source: str, source_type: str):
         return load_arxiv(source)
     else:
         raise ValueError(f"Unknown source_type: {source_type}")
+    
+def load_arxiv_by_id(arxiv_id: str):
+    """
+    Deterministically loads a known arXiv paper by ID, bypassing search entirely.
+    Use this when you already know the exact ID (e.g. for evaluation) — avoids
+    the ambiguity risk of load_arxiv()'s Tavily search potentially returning a
+    different paper that merely mentions this ID.
+    """
+    pdf_url = f"https://arxiv.org/pdf/{arxiv_id}"
+
+    response = requests.get(pdf_url)
+    response.raise_for_status()
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
+        tmp_file.write(response.content)
+        tmp_path = tmp_file.name
+
+    try:
+        chunks = load_pdf(tmp_path)
+    finally:
+        os.remove(tmp_path)
+
+    return chunks
