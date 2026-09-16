@@ -92,7 +92,7 @@ def run_evaluation():
     setup_eval_session()
 
     print("\n=== Evaluating RAG-grounded questions (all 5 metrics) ===")
-    rag_test_cases = build_test_cases(RAG_GOLDEN_DATASET[:2])  # limit to first 2 for brevity
+    rag_test_cases = build_test_cases(RAG_GOLDEN_DATASET)  # limit to first 2 for brevity
     rag_metrics = [
         ContextualPrecisionMetric(threshold=THRESHOLD),
         ContextualRecallMetric(threshold=THRESHOLD),
