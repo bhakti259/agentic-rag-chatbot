@@ -5,4 +5,6 @@ scratch/
 .venv/
 __pycache__/
 *.py[cod]
-.embedding_cache/
+embedding_cache/
+checkpoints.sqlite
+sessions.json
