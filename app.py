@@ -8,9 +8,38 @@ from backend.paper_loader import load_paper
 from backend.vector_store import add_chunks
 import json
 from pathlib import Path
-
+from langchain_openai import ChatOpenAI
 
 SESSIONS_FILE = Path("sessions.json")
+
+title_llm = ChatOpenAI(model="gpt-5-mini")
+
+
+def generate_session_title(first_message: str) -> str:
+    """
+    Generates a short (3-5 word) session title from the first user message,
+    replacing the generic 'New Chat' placeholder.
+    """
+    prompt = f"""
+        Generate a short, descriptive title (3-5 words, no punctuation at the end)
+        for a chat session that starts with this message. Return ONLY the title,
+        nothing else.
+
+        Message: {first_message}
+    """
+    try:
+        response = title_llm.invoke(prompt)
+        title = response.content.strip().strip('"')
+        return title if title else "New Chat"
+    except Exception:
+        return "New Chat"  # fail gracefully — naming is cosmetic, never block the chat
+    
+def persist_current_sessions():
+    """Convenience helper: saves title + papers_loaded for every session."""
+    save_sessions_metadata({
+        sid: {"title": s["title"], "papers_loaded": s["papers_loaded"]}
+        for sid, s in st.session_state.sessions.items()
+    })
 
 def load_sessions_metadata() -> dict:
     """Loads session metadata (id -> {title, papers_loaded}) from disk."""
@@ -173,11 +202,15 @@ if user_query:
         with st.chat_message("assistant"):
             st.markdown(answer)
     else:
+        # Auto-name the session on its first real question
+        if active_session["title"] == "New Chat" and len(active_session["messages"]) == 0:
+            active_session["title"] = generate_session_title(user_query)
+            persist_current_sessions()
         active_session["messages"].append({"role": "user", "content": user_query})
         active_session["display_messages"].append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
-
+     
         result = rag_app.invoke({
             "messages": [],
             "session_id": active_id,
