@@ -6,34 +6,60 @@ from backend.rag_graph import app as rag_app
 from backend.btw_handler import is_btw_command, handle_btw
 from backend.paper_loader import load_paper
 from backend.vector_store import add_chunks
+import json
+from pathlib import Path
+
+
+SESSIONS_FILE = Path("sessions.json")
+
+def load_sessions_metadata() -> dict:
+    """Loads session metadata (id -> {title, papers_loaded}) from disk."""
+    if SESSIONS_FILE.exists():
+        with open(SESSIONS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_sessions_metadata(sessions_metadata: dict):
+    """Persists session metadata to disk."""
+    with open(SESSIONS_FILE, "w") as f:
+        json.dump(sessions_metadata, f, indent=2)
 
 st.set_page_config(page_title="Agentic RAG Chatbot", page_icon="📄")
 
 # --- Multi-session state: a dict of session_id -> session data ---
 if "sessions" not in st.session_state:
-    st.session_state.sessions = {}
+    persisted = load_sessions_metadata()
+    st.session_state.sessions = {
+        sid: {"messages": [], "display_messages": [], "papers_loaded": meta["papers_loaded"], "title": meta["title"]}
+        for sid, meta in persisted.items()
+    }
 
 if "active_session_id" not in st.session_state:
-    # Create the first session automatically
-    new_id = str(uuid.uuid4())
-    st.session_state.sessions[new_id] = {
-        "messages": [],
-        "display_messages": [],
-        "papers_loaded": []
-    }
-    st.session_state.active_session_id = new_id
-
+    if st.session_state.sessions:
+        # Resume the most recently used session
+        st.session_state.active_session_id = list(st.session_state.sessions.keys())[-1]
+    else:
+        new_id = str(uuid.uuid4())
+        st.session_state.sessions[new_id] = {
+            "messages": [], "display_messages": [], "papers_loaded": [], "title": "New Chat"
+        }
+        st.session_state.active_session_id = new_id
+        save_sessions_metadata({
+            sid: {"title": s["title"], "papers_loaded": s["papers_loaded"]}
+            for sid, s in st.session_state.sessions.items()
+        })
 
 def create_new_session():
     new_id = str(uuid.uuid4())
     st.session_state.sessions[new_id] = {
-        "messages": [],           # LLM conversational context — /btw excluded
-        "display_messages": [],   # what's shown in the chat UI — includes /btw
-        "papers_loaded": []
+        "messages": [], "display_messages": [], "papers_loaded": [], "title": "New Chat"
     }
-
-   # st.session_state.sessions[new_id] = {"messages": [], "papers_loaded": []}
     st.session_state.active_session_id = new_id
+    save_sessions_metadata({
+        sid: {"title": s["title"], "papers_loaded": s["papers_loaded"]}
+        for sid, s in st.session_state.sessions.items()
+    })
 
 
 # --- Sidebar: session management ---
@@ -47,7 +73,7 @@ with st.sidebar:
     st.divider()
 
     for sid, sdata in st.session_state.sessions.items():
-        label = f"Session {sid[:8]}"
+        label = sdata["title"]
         if sdata["papers_loaded"]:
             label += f" ({len(sdata['papers_loaded'])} papers)"
         if st.button(label, key=f"switch_{sid}"):
@@ -83,6 +109,11 @@ with st.sidebar:
                     chunks = load_paper(tmp_path, source_type)
                     add_chunks(active_id, chunks)
                     active_session["papers_loaded"].append(uploaded_file.name)
+                    
+                    save_sessions_metadata({
+                    sid: {"title": s["title"], "papers_loaded": s["papers_loaded"]}
+                    for sid, s in st.session_state.sessions.items()
+                    })
                     st.success(f"Loaded {len(chunks)} chunks from {uploaded_file.name}")
                 finally:
                     os.remove(tmp_path)
@@ -95,6 +126,10 @@ with st.sidebar:
                     chunks = load_paper(url, "url")
                     add_chunks(active_id, chunks)
                     active_session["papers_loaded"].append(url)
+                    save_sessions_metadata({
+                    sid: {"title": s["title"], "papers_loaded": s["papers_loaded"]}
+                    for sid, s in st.session_state.sessions.items()
+                    })
                     st.success(f"Loaded {len(chunks)} chunks from URL")
                 except ValueError as e:
                     st.error(str(e))
@@ -106,6 +141,10 @@ with st.sidebar:
                 chunks = load_paper(arxiv_query, "arxiv")
                 add_chunks(active_id, chunks)
                 active_session["papers_loaded"].append(arxiv_query)
+                save_sessions_metadata({
+                sid: {"title": s["title"], "papers_loaded": s["papers_loaded"]}
+                for sid, s in st.session_state.sessions.items()
+                })
                 st.success(f"Loaded {len(chunks)} chunks from ArXiv")
 
     if active_session["papers_loaded"]:
