@@ -16,6 +16,8 @@ Upload a research paper (PDF, plain text/Markdown, a web URL, or search ArXiv), 
 - **Is measured, not just demoed** — a DeepEval-based evaluation pipeline scores faithfulness, answer relevancy, and retrieval quality against a hand-written golden dataset
 
 ## Architecture
+
+```mermaid
 flowchart TD
     A["User Query"] --> B{"Router"}
 
@@ -40,6 +42,7 @@ flowchart TD
 
     style B fill:#e1d5f7
     style G fill:#ffe4b3
+```
        
 
 Built with **LangGraph** as a stateful graph (not a linear chain), so the self-correction loop and conditional routing are first-class parts of the architecture, not bolted-on logic.
