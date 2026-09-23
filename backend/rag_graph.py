@@ -5,6 +5,12 @@ from backend.models import RouteDecision
 from backend.vector_store import retrieve as vector_retrieve
 from backend.models import RelevancyCheck, QueryRewrite, VerdictResult 
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.sqlite import SqliteSaver
+import sqlite3
+
+conn = sqlite3.connect("checkpoints.sqlite", check_same_thread=False)
+checkpointer = SqliteSaver(conn)
+
 
 from tavily import TavilyClient
 import os
@@ -157,13 +163,13 @@ def route_query(state: GraphState) -> str:
     return state["route"]  # "direct_answer", "retrieve", "web_search", or "verify_claim"
 
 
-def direct_answer_stub(state: GraphState) -> dict:
+def direct_answer_node(state: GraphState) -> dict:
     """
     TEMPORARY STUB — will become a real direct_answer_node later.
     For now, just proves the branch is reachable.
     """
     response = llm.invoke(state["query"])
-    return {"final_answer": f"[STUB: direct_answer] {response.content}"}
+    return {"final_answer": f"{response.content}"}
 
 
 def web_search_node(state: GraphState) -> dict:
@@ -265,7 +271,7 @@ graph.add_node("retrieve", retrieve_node)
 graph.add_node("relevancy_check", relevancy_check_node)
 graph.add_node("rewrite", rewrite_node)
 graph.add_node("generate", generate_node)
-graph.add_node("direct_answer", direct_answer_stub)
+graph.add_node("direct_answer", direct_answer_node)
 graph.add_node("web_search", web_search_node)
 graph.add_node("verify_claim", verify_claim_node)
 
@@ -300,4 +306,4 @@ graph.add_edge("direct_answer", END)
 graph.add_edge("web_search", END)
 graph.add_edge("verify_claim", END)
 
-app = graph.compile()
+app = graph.compile(checkpointer=checkpointer)

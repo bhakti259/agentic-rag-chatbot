@@ -150,7 +150,9 @@ if user_query:
             "rewrite_count": 0,
             "verdict": "",
             "final_answer": "",
-        })
+        },
+        config={"configurable": {"thread_id": active_id}}
+        )
         answer = result["final_answer"]
 
         active_session["messages"].append({"role": "assistant", "content": answer})
