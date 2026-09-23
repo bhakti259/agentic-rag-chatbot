@@ -2,7 +2,6 @@ import streamlit as st
 import uuid
 import tempfile
 import os
-from backend.rag_graph import app as rag_app
 from backend.btw_handler import is_btw_command, handle_btw
 from backend.paper_loader import load_paper
 from backend.vector_store import add_chunks
@@ -13,6 +12,13 @@ from langchain_openai import ChatOpenAI
 SESSIONS_FILE = Path("sessions.json")
 
 title_llm = ChatOpenAI(model="gpt-5-mini")
+
+@st.cache_resource
+def get_rag_app():
+    from backend.rag_graph import app as rag_app
+    return rag_app
+
+rag_app = get_rag_app()
 
 
 def generate_session_title(first_message: str) -> str:

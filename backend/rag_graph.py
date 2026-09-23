@@ -306,4 +306,5 @@ graph.add_edge("direct_answer", END)
 graph.add_edge("web_search", END)
 graph.add_edge("verify_claim", END)
 
+print("Compiling graph...")
 app = graph.compile(checkpointer=checkpointer)
